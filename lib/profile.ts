@@ -1,0 +1,5 @@
+import { z } from 'zod';
+export const profileSchema = z.object({title:z.string().trim().min(1,'Vul een titel in.').max(80),bio:z.string().max(240),avatar:z.string().regex(/^$|^\/media\/[a-f0-9-]+$/),background:z.string().regex(/^#[0-9a-fA-F]{6}$/),color:z.string().regex(/^#[0-9a-fA-F]{6}$/),shape:z.enum(['round','soft','square']),links:z.array(z.object({id:z.string().uuid(),title:z.string().trim().min(1,'Geef iedere link een titel.').max(100),url:z.string().max(2048).url('Vul een geldig webadres in.').refine(v=>/^https?:\/\//i.test(v),'Gebruik een http- of https-adres.'),visible:z.boolean()})).max(50)});
+export type Profile = z.infer<typeof profileSchema>;
+export const emptyProfile:Profile={title:'',bio:'',avatar:'',background:'#e5ebff',color:'#243eb8',shape:'round',links:[]};
+export function textColor(hex:string){const rgb=hex.slice(1).match(/../g)!.map(v=>{const c=parseInt(v,16)/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722>.179?'#111827':'#ffffff'}
