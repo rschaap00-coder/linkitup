@@ -5,7 +5,7 @@ import { sameOrigin,boundedBody } from '@/lib/request';
 export const runtime = 'nodejs';
 export async function POST(request:Request) {
   const user = await currentUser();
-  if (!user) return Response.json({error:'Log in met Google om je pagina op te slaan.'},{status:401});
+  if (!user) return Response.json({error:'Log in om je pagina op te slaan.'},{status:401});
   if (!sameOrigin(request)) return Response.json({error:'Ongeldige aanvraag.'},{status:403});
   try {
     const raw = new TextDecoder().decode(await boundedBody(request,150000));

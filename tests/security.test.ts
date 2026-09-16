@@ -1,14 +1,31 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {verifiedGoogleOwner} from '../lib/identity.ts';
+import {credentialsSchema, registrationSchema, localOwner} from '../lib/identity.ts';
+import {hashPassword, verifyPassword} from '../lib/password.ts';
 import {boundedBody,sameOrigin} from '../lib/request.ts';
 import {profileSchema,emptyProfile} from '../lib/profile.ts';
 
-test('Google accounts use a verified immutable subject, never an email address',()=>{
- assert.equal(verifiedGoogleOwner({sub:'1234567',email_verified:true,email:'a@example.org'}),'google:1234567');
- assert.equal(verifiedGoogleOwner({sub:'1234567',email_verified:true,email:'changed@example.org'}),'google:1234567');
- assert.notEqual(verifiedGoogleOwner({sub:'7654321',email_verified:true}), 'google:1234567');
- for(const p of [null,{}, {sub:'123',email_verified:false},{sub:'123',email_verified:'true'},{email:'a@example.org',email_verified:true}])assert.equal(verifiedGoogleOwner(p),null);
+test('Local identity rejects legacy and attacker-controlled owners',()=>{
+ assert.equal(localOwner('google:123'),null);
+ assert.equal(localOwner('someone@example.org'),null);
+ assert.equal(localOwner('local:b9fd8885-8d39-4a1d-89bd-59b176d6086e'),'local:b9fd8885-8d39-4a1d-89bd-59b176d6086e');
+});
+test('Passwords are salted and only the correct password verifies',async()=>{
+ const password='Een lange geheime wachtzin!';
+ const a=await hashPassword(password),b=await hashPassword(password);
+ assert.notEqual(a,b); assert.equal(a.includes(password),false);
+ assert.equal(await verifyPassword(password,a),true);
+ assert.equal(await verifyPassword('Verkeerd wachtwoord',a),false);
+ assert.equal(await verifyPassword(password),false);
+ assert.equal(await verifyPassword(password,'malformed'),false);
+});
+test('Credentials normalize email and reject weak or mismatched passwords',()=>{
+ const base={email:' Test@Example.org ',password:'Een lange wachtzin',name:'Test',confirmation:'Een lange wachtzin'};
+ assert.equal(credentialsSchema.parse(base).email,'test@example.org');
+ assert.equal(registrationSchema.safeParse(base).success,true);
+ assert.equal(registrationSchema.safeParse({...base,confirmation:'anders'}).success,false);
+ for(const password of ['kort','x'.repeat(129)]) assert.equal(credentialsSchema.safeParse({...base,password}).success,false);
+ assert.equal(credentialsSchema.safeParse({...base,email:'invalid'}).success,false);
 });
 
 test('Writes reject missing and foreign origins',()=>{

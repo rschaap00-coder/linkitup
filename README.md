@@ -1,119 +1,81 @@
-# Linkplek — Vercel + Google
+# Linkplek — eigen accounts op Vercel
 
-Complete Nederlandstalige linkpagina-app voor **Next.js op Vercel**, met **Google-login via Auth.js**, **Neon PostgreSQL** en **Vercel Blob**. Bevat profielbeheer, foto/logo-upload, links toevoegen/bewerken/verbergen/verwijderen, slepen en toetsenbordalternatief, vormgeving, livevoorbeeld en PNG/SVG QR-downloads.
+Nederlandstalige Linktree-app met registratie via e-mailadres en wachtwoord, een beveiligd dashboard, Neon PostgreSQL, foto-upload via Vercel Blob en permanente QR-codes. Google-login is verwijderd. Accountgegevens en wachtwoordhashes staan in je eigen PostgreSQL-database.
 
-Deze versie is zelfstandig: er zijn geen ChatGPT-account, Sites-hosting of Cloudflare-bindings nodig. De Google-koppeling is geïmplementeerd, maar werkt pas nadat jouw Google OAuth-app en omgevingsvariabelen zijn ingesteld.
+## Bestaand Vercel-project bijwerken
 
-## 1. Upload naar GitHub
+1. Kies Framework **Next.js**, Root Directory de repository-root (waar `package.json` en `app/` staan), Node **22.x** en Build Command **`pnpm build`**. Verwijder een eventuele override `next build`: anders wordt de migratie overgeslagen.
+2. Controleer de servervariabelen hieronder. De bestaande `DATABASE_URL` en `AUTH_SECRET` kunnen blijven staan. `AUTH_GOOGLE_ID` en `AUTH_GOOGLE_SECRET` zijn niet meer nodig.
+3. Bij een **production** build voert `scripts/build.mjs` automatisch de databasemigraties uit voordat Next.js bouwt. Deze voegen tabellen toe en verwijderen geen profielen. Bij een ontbrekende/onbereikbare database stopt de build. Bekijk dan de buildlogs.
+4. Open `/registreren`, maak een account en log vervolgens in via `/inloggen`.
 
-Pak het ZIP-bestand uit. Zet de **inhoud** van `linkplek-vercel` in de hoofdmap van je repository, zodat `package.json` bovenaan staat. Upload ook `.gitignore` en `.env.example`. Upload geen echte `.env.local`, `node_modules` of `.next`.
+Vercel heeft geen duurzame lokale serverdisk voor accounts. De website gebruikt daarom de gekoppelde PostgreSQL-database, bijvoorbeeld Neon via Vercel Marketplace. Registratie en wachtwoordcontrole gebeuren in deze website, zonder externe inlogprovider.
 
-Als je de eerdere Sites-code vervangt, gebruik deze volledige map als nieuwe projectinhoud: meng beide versies niet. Deze versie gebruikt `next build`, geen Vinext of Wrangler.
+## Configuratie
 
-## 2. Maak een Vercel-project
-
-Importeer de GitHub-repository in Vercel. Selecteer **Next.js** en de map met `package.json` als Root Directory. Gebruik Node.js 22.x. Vercel gebruikt de vastgelegde pnpm-versie en `pnpm run build`.
-
-Kies je vaste productieadres, bijvoorbeeld `https://jouw-project.vercel.app`, of je eigen domein. Dit adres is nodig voor Google-login en staat hieronder aangeduid als `JOUW_DOMEIN`. Gebruik niet het tijdelijke adres van iedere preview-deployment.
-
-## 3. Koppel de database en foto-opslag
-
-- Koppel een **Neon PostgreSQL**-database via Vercel Marketplace/Storage. Zorg dat de verbindingsstring beschikbaar is als `DATABASE_URL`.
-- Voer de inhoud van `migrations/001_profiles.sql` één keer uit in de Neon SQL Editor. Dit maakt `profiles` en `avatars`; het script verwijdert geen gegevens. Alternatief: voer lokaal `pnpm db:migrate` uit met `DATABASE_URL` in `.env.local`.
-- Maak een **openbare Vercel Blob-store** en verbind deze met het project. Gebruik de door Vercel beheerde OIDC-koppeling met `BLOB_STORE_ID`, of stel `BLOB_READ_WRITE_TOKEN` in. De app gebruikt de SDK-configuratie op de server.
-- Houd test- en productiedatabases gescheiden wanneer je previews gebruikt.
-
-Bronnen: [Vercel-opslag](https://vercel.com/docs/storage), [Neon-driver](https://github.com/neondatabase/serverless), [Vercel Blob-configuratie](https://vercel.com/docs/vercel-blob/using-blob-sdk).
-
-## 4. Google-inloggen activeren
-
-1. Open [Google Cloud Console](https://console.cloud.google.com/), selecteer of maak een project en open **Google Auth Platform**.
-2. Vul de appnaam `Linkplek`, het supportadres en de benodigde branding/audience-instellingen in. Gebruik External als ook mensen buiten jouw organisatie mogen inloggen.
-3. Maak bij Clients een OAuth-client van het type **Web application**.
-4. Voeg bij Authorized JavaScript origins je productie-origin toe: `https://JOUW_DOMEIN`.
-5. Voeg bij Authorized redirect URIs **exact** toe:
-
-   ```text
-   https://JOUW_DOMEIN/api/auth/callback/google
-   ```
-
-6. Voor lokale ontwikkeling kun je ook toevoegen:
-
-   ```text
-   http://localhost:3000/api/auth/callback/google
-   ```
-
-7. Zet de Client ID en Client secret in de onderstaande Vercel-variabelen. Bewaar het secret alleen als omgevingsvariabele.
-8. Staat je Google-app nog op Testing? Voeg de gebruikers die testen toe aan de testgebruikers. Stel de juiste productie-publicatiestatus in als iedereen de app moet kunnen gebruiken; rond eventuele vereiste Google-controles af.
-
-Alleen de standaard login-scope voor identiteit is nodig; de app vraagt geen toegang tot Gmail, Drive of Agenda. Bron: [Auth.js Google-provider](https://authjs.dev/getting-started/providers/google), [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect).
-
-## 5. Vercel-omgevingsvariabelen
-
-Stel deze waarden in onder Project → Settings → Environment Variables:
-
-| Naam | Waarde |
+| Variabele | Waarde |
 | --- | --- |
-| `AUTH_GOOGLE_ID` | OAuth Client ID van Google |
-| `AUTH_GOOGLE_SECRET` | OAuth Client secret van Google |
-| `AUTH_SECRET` | Een nieuwe, lange willekeurige geheime waarde |
-| `AUTH_URL` | Exacte productie-origin, bijvoorbeeld `https://jouw-project.vercel.app` |
-| `DATABASE_URL` | Neon PostgreSQL-verbindingsstring |
-| `BLOB_STORE_ID` | Door de gekoppelde Vercel Blob-store ingesteld bij OIDC |
-| `BLOB_READ_WRITE_TOKEN` | Alternatief voor de OIDC-koppeling; ook bruikbaar lokaal |
+| `DATABASE_URL` | Neon PostgreSQL-verbindingsstring met SSL |
+| `AUTH_SECRET` | Sterk willekeurig geheim, minimaal 32 bytes; houd dit stabiel |
+| `AUTH_URL` | Vast productieadres, bijvoorbeeld `https://jouw-project.vercel.app` |
+| `BLOB_STORE_ID` | Gekoppelde openbare Vercel Blob-store voor foto's via OIDC |
+| `BLOB_READ_WRITE_TOKEN` | Alternatief voor Blob-authenticatie, ook voor lokaal gebruik |
 
-Genereer `AUTH_SECRET` op je eigen computer:
+Genereer een geheim met `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`. Zet geheimen alleen in Vercel of `.env.local`, nooit in GitHub. Gebruik geen `NEXT_PUBLIC_`-prefix. Verbind Neon en een **public** Blob-store met het juiste project. Blob is alleen nodig voor foto-uploads.
 
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
-```
+Gebruik een aparte database voor development/preview. Previewbuilds passen de database niet automatisch aan; voer daarvoor expliciet `pnpm db:migrate` uit. Gebruik voor `AUTH_URL` het adres van die omgeving. Laat de productiepagina publiek bereikbaar voor QR-bezoekers.
 
-Deze waarden horen **niet** in GitHub en krijgen geen `NEXT_PUBLIC_`-prefix. Na instellen/wijzigen: **Redeploy** in Vercel. Bij gebruik van een eigen domein moeten `AUTH_URL` en de Google redirect URI overeenkomen. Zorg dat anonieme bezoekers toegang hebben tot de productiepublicatie; algemene Vercel Deployment Protection kan anders ook QR-bezoekers tegenhouden.
+## Lokaal installeren
 
-Bron: [Auth.js-configuratie](https://authjs.dev/getting-started/installation).
+Gebruik Node 22 en pnpm 11.25.0.
 
-## Lokaal ontwikkelen
-
-```bash
-corepack enable
+```sh
 pnpm install --frozen-lockfile
 cp .env.example .env.local
-# Vul jouw configuratie in .env.local in.
+# Vul .env.local in, met AUTH_URL=http://localhost:3000
 pnpm db:migrate
 pnpm dev
 ```
 
-Open `http://localhost:3000`. Zonder Google-configuratie zie je een duidelijke melding en is aanmelden uitgeschakeld. Zonder database kun je geen links opslaan. Voor foto-uploads is ook Blob-configuratie nodig.
+Open `http://localhost:3000`. Zonder databaseconfiguratie of `AUTH_SECRET` zijn de formulieren uitgeschakeld. Voer de migratie uit voordat je registreert.
 
-Controleer de code met:
-
-```bash
+```sh
 pnpm test
 pnpm typecheck
 pnpm build
 pnpm start
 ```
 
-## Gebruik en beveiliging
+## Accounts en beveiliging
 
-- `/` vereist een geldige sessie; bezoekers zonder sessie worden naar `/inloggen` gestuurd.
-- Na Google-login komt de gebruiker op het eigen dashboard. De eerste opslag maakt het profiel.
-- De eigenaar komt uit Google's geverifieerde, onveranderlijke `sub`-identiteit in een door Auth.js beschermde sessie. E-mailadressen worden niet gebruikt voor automatische accountkoppeling.
-- API-aanvragen controleren de sessie en de Origin op de server. Gegevens worden met geparametriseerde SQL opgeslagen. De browser kan geen andere eigenaar of pagina-URL kiezen.
-- De bestaande pagina-UUID blijft bij iedere opslag gelijk. De QR-code bevat alleen `/p/<uuid>` op het huidige domein. Publieke pagina's tonen alleen zichtbare links en vereisen geen login.
-- Profielfoto's zijn openbaar. Een foto uit een profiel verwijderen verwijdert de verwijzing; de oude upload blijft in Blob tot de beheerder deze opruimt.
-- Auth.js verzorgt OAuth, CSRF-bescherming voor aanmelden/afmelden en versleutelde sessiecookies. Deze versie gebruikt de vastgelegde Auth.js v5-beta uit de lockfile.
+- Registratie vraagt naam, e-mailadres en tweemaal het wachtwoord. Wachtwoorden hebben 12–128 tekens en worden gehasht met een willekeurige salt en scrypt (N=32768, r=8, p=3). Ze worden nooit leesbaar opgeslagen.
+- E-mail wordt getrimd en naar kleine letters omgezet. Een unieke databaseconstraint voorkomt dubbele accounts, ook bij gelijktijdige aanvragen. Herregistreren overschrijft nooit een wachtwoord. De bevestiging verraadt niet of een adres al bestaat.
+- Er is nog geen e-mailverificatie of automatische wachtwoordherstelmail. Gebruik e-mailadressen daarom niet als bewijs van identiteit of voor het claimen van bestaande profielen.
+- Auth.js Credentials verzorgt HTTP-only sessiecookies met een maximale duur van zeven dagen. Elke beschermde aanvraag controleert ook of het lokale account bestaat. Verwijderde accounts verliezen toegang met bestaande sessies.
+- PostgreSQL beperkt aanmeldpogingen atomair: 10 per e-mailadres en 60 per IP per 15 minuten. Registratie: 10 per IP per 15 minuten. Hiervoor wordt op Vercel de door het platform ingestelde IP-header gebruikt; lokaal delen aanvragen één IP-limiet.
+- `auth_limits` bevat HMAC-sleutels, geen leesbare e-mails of IP's. Verwijder verlopen records zo nodig met `DELETE FROM auth_limits WHERE expires_at < NOW();`; de migratierunner doet dit ook.
+- Server Actions en Auth.js verzorgen CSRF-bescherming. Profiel- en upload-API's controleren daarnaast Origin. Alleen de server bepaalt de eigenaar (`local:<uuid>`).
+- Alleen http(s)-links worden geaccepteerd. Uploads zijn beperkt tot PNG/JPEG/WebP van maximaal 2 MB met controles op bestandssignatuur en eigendom.
 
-## Overstappen vanaf de eerdere Sites-versie
+Bronnen: [Auth.js Credentials](https://authjs.dev/getting-started/authentication/credentials), [OWASP wachtwoordopslag](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
 
-Deze code verandert de bestaande Sites-publicatie niet en kopieert geen productiegegevens. Bestaande ChatGPT-profielen, foto's en hun oude QR-adressen worden **niet automatisch** naar Google-accounts of een nieuw domein overgezet. Een bestaand profiel veilig overzetten vereist een gecontroleerde eigenaarskoppeling en een gegevens-/fotomigratie. Behoud bij zo'n migratie de pagina-UUID's en regel verwijzingen vanaf het oude domein voordat je al gedrukte QR-codes vervangt. Koppel accounts nooit automatisch alleen op basis van een gelijk e-mailadres.
+## Bestaande Google-profielen
 
-## Laatste controle na configuratie
+Bestaande profielen, foto's, pagina-UUID's en openbare adressen blijven behouden. Hun QR-codes blijven werken zolang het domein hetzelfde blijft. Oude Google-sessies kunnen niet meer inloggen. Nieuwe lokale accounts krijgen een eigen eigenaar.
 
-1. Log in met Google, maak twee links en sla op.
-2. Download de QR-code en open deze op een telefoon zonder ingelogde sessie.
-3. Wijzig/verberg een link en scan dezelfde QR-code opnieuw.
-4. Log uit en opnieuw in: je eigen profiel hoort terug te komen.
-5. Gebruik een tweede Google-account: dit moet een afzonderlijk profiel hebben.
+Er is **geen automatische koppeling op e-mailadres**: een nieuw account heeft geen bewezen eigendom van een oud profiel. Laat een beheerder het eigendom afzonderlijk verifiëren en daarna `profiles.owner` en `avatars.owner` samen in één transactie omzetten van de oude `google:<sub>` naar de geverifieerde nieuwe `local:<uuid>`. Behoud `profiles.slug`. Controleer vooraf dat het nieuwe account nog geen ander profiel heeft en maak een back-up. Voeg accounts nooit blind samen.
 
-De lokale controles testen accountidentiteit, URL-validatie, Origin-controles en begrensde uploads. Echte Google-aanmelding, productieopslag en camerascans kunnen pas worden getest met de gekoppelde diensten en jouw OAuth-configuratie.
+## Linkpagina en QR-code
+
+Na de eerste opslag krijgt het account een vaste `/p/<uuid>`-URL. Het dashboard bevat profieltekst, foto/logo, kleuren, knopstijl, toevoegen/bewerken/verwijderen/verbergen van links, verslepen en verplaatsen met toetsenbordknoppen. De QR-code bevat alleen die vaste URL, met zwart/wit contrast en witruimte. Downloads als PNG en SVG staan in het dashboard. Na opslaan zijn wijzigingen direct openbaar zichtbaar zonder nieuwe QR-code. Verander het domein niet zonder permanente redirects voor gedeelde codes.
+
+## Controle na publicatie
+
+1. Maak account A aan, log in, voeg links toe en sla op.
+2. Download de QR-code en open de openbare pagina zonder in te loggen.
+3. Wijzig/verberg/verwijder een link, sla op en scan dezelfde QR-code opnieuw.
+4. Log uit en opnieuw in: de opgeslagen gegevens moeten terugkomen.
+5. Maak account B aan: het dashboard moet leeg beginnen, zonder gegevens van A.
+6. Controleer dat een verkeerd wachtwoord wordt geweigerd en het juiste werkt.
+
+De tests controleren wachtwoordhashing, invoervalidatie, accountidentiteit, URL-validatie, Origin-controles en begrensde verzoeken. Controleer de volledige registratie-/opslagflow ook met de aangesloten productiedatabase.

@@ -1,8 +1,15 @@
-// Only consume a profile after Auth.js has validated Google's OIDC response.
-// Never identify accounts by email: Google's immutable subject is the owner key.
-export function verifiedGoogleOwner(profile: unknown): string | null {
-  if (!profile || typeof profile !== 'object') return null;
-  const p = profile as { sub?: unknown; email_verified?: unknown };
-  return typeof p.sub === 'string' && /^[a-zA-Z0-9_-]{1,255}$/.test(p.sub) && p.email_verified === true
-    ? `google:${p.sub}` : null;
+import { z } from 'zod';
+
+export const credentialsSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  password: z.string().min(12).max(128),
+});
+export const registrationSchema = credentialsSchema.extend({
+  name: z.string().trim().min(1).max(80),
+  confirmation: z.string().max(128),
+}).refine(value => value.password === value.confirmation, {
+  message: 'De wachtwoorden komen niet overeen.', path: ['confirmation'],
+});
+export function localOwner(id: unknown): string | null {
+  return typeof id === 'string' && /^local:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : null;
 }

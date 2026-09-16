@@ -1,37 +1,36 @@
 import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
-import { verifiedGoogleOwner } from './lib/identity';
+import Credentials from 'next-auth/providers/credentials';
+import { authenticate } from './lib/accounts';
+import { localOwner } from './lib/identity';
+import { db } from './lib/storage';
 
-export function googleConfigured() {
-  return Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET && process.env.AUTH_SECRET);
+export function authConfigured() {
+  return Boolean(process.env.AUTH_SECRET && process.env.DATABASE_URL);
 }
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [Google({ authorization: { params: { prompt: 'select_account' } } })],
+  providers: [Credentials({
+    credentials: { email: { type: 'email' }, password: { type: 'password' } },
+    authorize: (credentials, request) => authenticate(credentials, request.headers),
+  })],
   session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 7 },
   pages: { signIn: '/inloggen', error: '/inloggen' },
   callbacks: {
-    signIn({ account, profile }) {
-      return account?.provider === 'google' && verifiedGoogleOwner(profile) !== null;
-    },
-    jwt({ token, account, profile }) {
-      if (account) {
-        const owner = account.provider === 'google' ? verifiedGoogleOwner(profile) : null;
-        if (!owner) throw new Error('Invalid Google identity');
-        token.owner = owner;
-      }
+    jwt({ token, user }) {
+      if (user) token.owner = localOwner(user.id);
       return token;
     },
     session({ session, token }) {
-      if (session.user && typeof token.owner === 'string') session.user.id = token.owner;
+      if (session.user) session.user.id = localOwner(token.owner) || '';
       return session;
     },
   },
 });
-
 export async function currentUser() {
-  if (!googleConfigured()) return null;
+  if (!authConfigured()) return null;
   const session = await auth();
-  if (!session?.user?.id?.startsWith('google:')) return null;
-  return { userId: session.user.id, email: session.user.email || '', name: session.user.name || '' };
+  const owner = localOwner(session?.user?.id);
+  if (!owner) return null;
+  const rows = await db()`SELECT email, name FROM users WHERE id = ${owner.slice(6)}`;
+  if (!rows[0]) return null;
+  return { userId: owner, email: rows[0].email as string, name: rows[0].name as string };
 }

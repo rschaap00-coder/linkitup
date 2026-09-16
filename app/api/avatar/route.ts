@@ -4,7 +4,7 @@ import { db } from '@/lib/storage';
 import { sameOrigin,boundedBody } from '@/lib/request';
 export const runtime = 'nodejs';
 export async function POST(request:Request) {
-  const user=await currentUser();if(!user)return Response.json({error:'Log eerst in met Google.'},{status:401});
+  const user=await currentUser();if(!user)return Response.json({error:'Log eerst in.'},{status:401});
   if(!sameOrigin(request))return Response.json({error:'Ongeldige aanvraag.'},{status:403});
   let blobUrl:string|undefined;
   try {
